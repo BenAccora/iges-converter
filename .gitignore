@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.igs
+*.iges
+*.step
+*.stp
+!sample/*.igs
+.DS_Store

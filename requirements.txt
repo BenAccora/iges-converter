@@ -1,0 +1,6 @@
+flask==3.1.0
+gunicorn==23.0.0
+# OpenCASCADE Python bindings (pip-installable, Linux manylinux wheels on PyPI).
+# Pulls numpy (+ vtk/matplotlib as declared deps — not imported at runtime, so
+# they cost build/disk but not RAM). Requires Python 3.11 (see .python-version).
+cadquery-ocp==7.9.3.1.1

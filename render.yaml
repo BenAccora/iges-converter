@@ -1,0 +1,13 @@
+# Render Blueprint. In the Render dashboard: New + -> Blueprint -> pick this repo.
+# (Or create a Web Service manually and copy the build/start commands below.)
+services:
+  - type: web
+    name: iges-tubest-converter
+    runtime: python
+    plan: starter            # 512 MB. 'free' also works but sleeps after 15 min idle.
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 2 --timeout 180 --bind 0.0.0.0:$PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"       # cadquery-ocp wheels are built for CPython 3.11

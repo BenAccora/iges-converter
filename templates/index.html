@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IGES &rarr; Tubes T Converter</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2029; --edge: #2b3542; --edge-hi: #3d81f6;
+    --text: #e6edf3; --muted: #8b98a5; --ok: #2ea043; --err: #f85149; --accent: #3d81f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 40px 16px;
+  }
+  .wrap { width: 100%; max-width: 640px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 24px; }
+  #drop {
+    border: 2px dashed var(--edge); border-radius: 12px; background: var(--panel);
+    padding: 48px 24px; text-align: center; cursor: pointer; transition: .15s;
+  }
+  #drop.hover { border-color: var(--edge-hi); background: #1d2733; }
+  #drop .big { font-size: 17px; font-weight: 600; }
+  #drop .small { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  #drop svg { width: 40px; height: 40px; opacity: .6; margin-bottom: 12px; }
+  input[type=file] { display: none; }
+  ul#list { list-style: none; padding: 0; margin: 20px 0 0; }
+  li.item {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; margin-bottom: 8px;
+  }
+  li.item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  li.item .status { font-size: 13px; font-weight: 600; }
+  .status.working { color: var(--accent); }
+  .status.done { color: var(--ok); }
+  .status.error { color: var(--err); }
+  .item .err-msg { flex-basis: 100%; color: var(--err); font-size: 12px; margin-top: 4px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .dot.working { background: var(--accent); animation: pulse 1s infinite; }
+  .dot.done { background: var(--ok); }
+  .dot.error { background: var(--err); }
+  @keyframes pulse { 0%,100%{opacity:.35} 50%{opacity:1} }
+  a.redl { color: var(--accent); font-size: 13px; text-decoration: none; }
+  a.redl:hover { text-decoration: underline; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 28px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>IGES &rarr; Tubes&nbsp;T Converter</h1>
+  <p class="sub">Drop Onshape IGS/STEP files. They're re-written as legacy
+     trimmed-surface IGES that Tubes&nbsp;T can import. Converted files download
+     automatically.</p>
+
+  <div id="drop">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+      <path d="M12 16V4M12 4l-4 4M12 4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round"/>
+    </svg>
+    <div class="big">Drop files here</div>
+    <div class="small">or click to browse &middot; .igs .iges .step .stp &middot; multiple OK</div>
+  </div>
+  <input type="file" id="file" multiple accept=".igs,.iges,.step,.stp,.IGS,.IGES,.STEP,.STP" />
+
+  <ul id="list"></ul>
+
+  <footer>Runs on OpenCASCADE &middot; converts entity 186 (BREP) &rarr; 144 (trimmed surfaces)</footer>
+</div>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+const list = document.getElementById('list');
+
+drop.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(e =>
+  drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('hover'); }));
+['dragleave','drop'].forEach(e =>
+  drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('hover'); }));
+drop.addEventListener('drop', ev => queue([...ev.dataTransfer.files]));
+fileInput.addEventListener('change', () => { queue([...fileInput.files]); fileInput.value = ''; });
+
+const OK_EXT = /\.(igs|iges|step|stp)$/i;
+
+async function queue(files) {
+  const valid = files.filter(f => OK_EXT.test(f.name));
+  for (const f of files.filter(f => !OK_EXT.test(f.name))) {
+    addRow(f.name, 'error', 'Unsupported file type');
+  }
+  // Convert one at a time to keep server memory low.
+  for (const f of valid) {
+    const row = addRow(f.name, 'working', 'Converting…');
+    try {
+      const { blob, fname } = await convertFile(f);
+      triggerDownload(blob, fname);
+      setRow(row, 'done', 'Converted', fname);
+    } catch (err) {
+      setRow(row, 'error', 'Failed', null, err.message);
+    }
+  }
+}
+
+async function convertFile(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch('/convert', { method: 'POST', body: fd });
+  if (!res.ok) {
+    let msg = `Server error (${res.status})`;
+    try { const j = await res.json(); if (j.error) msg = j.error; } catch (_) {}
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  let fname = file.name.replace(OK_EXT, '') + '_tubesT.igs';
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = cd.match(/filename="?([^"]+)"?/);
+  if (m) fname = m[1];
+  return { blob, fname };
+}
+
+function triggerDownload(blob, fname) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function addRow(name, state, statusText, errMsg) {
+  const li = document.createElement('li'); li.className = 'item';
+  li.innerHTML = `
+    <span class="dot ${state}"></span>
+    <span class="name">${escapeHtml(name)}</span>
+    <span class="status ${state}">${statusText}</span>`;
+  if (errMsg) {
+    const e = document.createElement('span'); e.className = 'err-msg';
+    e.textContent = errMsg; li.appendChild(e);
+  }
+  list.prepend(li);
+  return li;
+}
+
+function setRow(li, state, statusText, fname, errMsg) {
+  li.querySelector('.dot').className = 'dot ' + state;
+  const s = li.querySelector('.status'); s.className = 'status ' + state; s.textContent = statusText;
+  if (errMsg) {
+    let e = li.querySelector('.err-msg');
+    if (!e) { e = document.createElement('span'); e.className = 'err-msg'; li.appendChild(e); }
+    e.textContent = errMsg;
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+</script>
+</body>
+</html>
