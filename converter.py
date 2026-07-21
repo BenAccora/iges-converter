@@ -31,6 +31,8 @@ from OCP.IFSelect import IFSelect_RetDone
 from OCP.Interface import Interface_Static
 from OCP.ShapeFix import ShapeFix_Shape
 from OCP.TopoDS import TopoDS_Shape
+from OCP.BRepMesh import BRepMesh_IncrementalMesh
+from OCP.StlAPI import StlAPI_Writer
 
 
 class ConversionError(Exception):
@@ -93,6 +95,38 @@ def convert_to_legacy_iges(src: Path | str, dst: Path | str) -> Path:
             raise ConversionError("OpenCASCADE failed to write the IGES output.")
     finally:
         # Release OCC C++ objects promptly to keep the 512 MB instance happy.
+        shape = None  # noqa: F841
+        gc.collect()
+    return dst
+
+
+def convert_to_stl(
+    src: Path | str,
+    dst: Path | str,
+    *,
+    linear_deflection: float = 0.3,
+    angular_deflection: float = 0.5,
+) -> Path:
+    """Tessellate ``src`` (IGES/STEP) into a binary STL mesh for the 3D viewer.
+
+    ``linear_deflection`` is in model units (mm) — smaller = smoother curves but
+    more triangles. 0.3 mm keeps tube cylinders looking round while staying tiny.
+    """
+    src = Path(src)
+    dst = Path(dst)
+    if src.suffix.lower() not in SUPPORTED_EXTS:
+        raise ConversionError(
+            f"Unsupported file type '{src.suffix}'. Use .igs/.iges or .step/.stp."
+        )
+    try:
+        shape = _read_shape(src)
+        shape = _heal(shape)
+        BRepMesh_IncrementalMesh(shape, linear_deflection, False, angular_deflection, True)
+        writer = StlAPI_Writer()
+        writer.ASCIIMode = False  # binary STL — compact
+        if not writer.Write(shape, str(dst)):
+            raise ConversionError("Meshing failed — could not tessellate the model.")
+    finally:
         shape = None  # noqa: F841
         gc.collect()
     return dst

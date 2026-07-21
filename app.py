@@ -17,7 +17,12 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.utils import secure_filename
 
-from converter import SUPPORTED_EXTS, ConversionError, convert_to_legacy_iges
+from converter import (
+    SUPPORTED_EXTS,
+    ConversionError,
+    convert_to_legacy_iges,
+    convert_to_stl,
+)
 
 app = Flask(__name__)
 # Tube parts are small; cap uploads so a stray huge file can't blow the box.
@@ -71,6 +76,35 @@ def convert():
         download_name=out_name,
         mimetype="application/octet-stream",
     )
+
+
+@app.post("/mesh")
+def mesh():
+    """Tessellate an uploaded file and return a binary STL for the 3D viewer."""
+    uploaded = request.files.get("file")
+    if uploaded is None or not uploaded.filename:
+        return jsonify(error="No file was uploaded."), 400
+
+    safe_name = secure_filename(uploaded.filename) or "part.igs"
+    stem = Path(safe_name).stem
+    ext = Path(safe_name).suffix.lower()
+    if ext not in SUPPORTED_EXTS:
+        return jsonify(error=f"Unsupported file type '{ext}'."), 400
+
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / safe_name
+        dst = Path(tmp) / f"{stem}.stl"
+        uploaded.save(src)
+        try:
+            convert_to_stl(src, dst)
+        except ConversionError as exc:
+            return jsonify(error=str(exc)), 422
+        except Exception as exc:  # pragma: no cover - unexpected kernel failure
+            return jsonify(error=f"Meshing failed: {exc}"), 500
+        data = dst.read_bytes()
+
+    gc.collect()
+    return send_file(io.BytesIO(data), mimetype="model/stl", download_name=f"{stem}.stl")
 
 
 if __name__ == "__main__":

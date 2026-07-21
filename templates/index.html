@@ -7,7 +7,8 @@
 <style>
   :root {
     --bg: #0f1419; --panel: #1a2029; --edge: #2b3542; --edge-hi: #3d81f6;
-    --text: #e6edf3; --muted: #8b98a5; --ok: #2ea043; --err: #f85149; --accent: #3d81f6;
+    --text: #e6edf3; --muted: #8b98a5; --ok: #2ea043; --warn: #d29922;
+    --err: #f85149; --accent: #3d81f6;
   }
   * { box-sizing: border-box; }
   body {
@@ -15,45 +16,78 @@
     font: 15px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     display: flex; flex-direction: column; align-items: center; padding: 40px 16px;
   }
-  .wrap { width: 100%; max-width: 640px; }
+  .wrap { width: 100%; max-width: 760px; }
   h1 { font-size: 22px; margin: 0 0 4px; }
   p.sub { color: var(--muted); margin: 0 0 24px; }
   #drop {
     border: 2px dashed var(--edge); border-radius: 12px; background: var(--panel);
-    padding: 48px 24px; text-align: center; cursor: pointer; transition: .15s;
+    padding: 32px 24px; text-align: center; cursor: pointer; transition: .15s;
   }
   #drop.hover { border-color: var(--edge-hi); background: #1d2733; }
-  #drop .big { font-size: 17px; font-weight: 600; }
+  #drop .big { font-size: 16px; font-weight: 600; }
   #drop .small { color: var(--muted); font-size: 13px; margin-top: 6px; }
-  #drop svg { width: 40px; height: 40px; opacity: .6; margin-bottom: 12px; }
+  #drop svg { width: 34px; height: 34px; opacity: .6; margin-bottom: 8px; }
   input[type=file] { display: none; }
-  ul#list { list-style: none; padding: 0; margin: 20px 0 0; }
-  li.item {
-    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-    background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; margin-bottom: 8px;
+
+  /* Viewer */
+  #viewer-wrap { display: none; margin-top: 20px; }
+  #viewer {
+    position: relative; width: 100%; height: 440px; background: #0c1015;
+    border: 1px solid var(--edge); border-radius: 12px; overflow: hidden;
   }
+  #viewer canvas { display: block; }
+  #viewer .label {
+    position: absolute; top: 10px; left: 12px; font-size: 13px; font-weight: 600;
+    background: rgba(12,16,21,.7); padding: 4px 10px; border-radius: 6px;
+    max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #viewer .hint {
+    position: absolute; bottom: 10px; right: 12px; font-size: 11px; color: var(--muted);
+    background: rgba(12,16,21,.7); padding: 3px 8px; border-radius: 6px;
+  }
+  #viewer .spin {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 13px;
+  }
+
+  ul#list { list-style: none; padding: 0; margin: 18px 0 0; }
+  li.item {
+    display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
+    margin-bottom: 8px; flex-wrap: wrap;
+  }
+  li.item.viewable { cursor: pointer; }
+  li.item.viewable:hover { border-color: var(--edge-hi); }
+  li.item.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
   li.item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   li.item .status { font-size: 13px; font-weight: 600; }
-  .status.working { color: var(--accent); }
-  .status.done { color: var(--ok); }
-  .status.error { color: var(--err); }
+  .status.working { color: var(--accent); } .status.done { color: var(--ok); }
+  .status.warn { color: var(--warn); } .status.error { color: var(--err); }
   .item .err-msg { flex-basis: 100%; color: var(--err); font-size: 12px; margin-top: 4px; }
+  .eye { width: 15px; height: 15px; opacity: .55; flex: none; }
+  li.item.active .eye, li.item.viewable:hover .eye { opacity: 1; }
   .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
   .dot.working { background: var(--accent); animation: pulse 1s infinite; }
-  .dot.done { background: var(--ok); }
+  .dot.done { background: var(--ok); } .dot.warn { background: var(--warn); }
   .dot.error { background: var(--err); }
   @keyframes pulse { 0%,100%{opacity:.35} 50%{opacity:1} }
-  a.redl { color: var(--accent); font-size: 13px; text-decoration: none; }
-  a.redl:hover { text-decoration: underline; }
   footer { color: var(--muted); font-size: 12px; margin-top: 28px; text-align: center; }
 </style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
 <div class="wrap">
   <h1>IGES &rarr; Tubes&nbsp;T Converter</h1>
-  <p class="sub">Drop Onshape IGS/STEP files. They're re-written as legacy
-     trimmed-surface IGES that Tubes&nbsp;T can import. Converted files download
-     automatically.</p>
+  <p class="sub">Drop Onshape IGS/STEP files. Each is re-written as legacy
+     trimmed-surface IGES (auto-downloaded) and shown in the 3D viewer. Drop
+     several and click one in the list to view it.</p>
 
   <div id="drop">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -65,16 +99,38 @@
   </div>
   <input type="file" id="file" multiple accept=".igs,.iges,.step,.stp,.IGS,.IGES,.STEP,.STP" />
 
+  <div id="viewer-wrap">
+    <div id="viewer">
+      <div class="label" id="viewer-label"></div>
+      <div class="hint">drag&nbsp;rotate &middot; scroll&nbsp;zoom &middot; right-drag&nbsp;pan</div>
+      <div class="spin" id="viewer-spin">Loading model…</div>
+    </div>
+  </div>
+
   <ul id="list"></ul>
 
-  <footer>Runs on OpenCASCADE &middot; converts entity 186 (BREP) &rarr; 144 (trimmed surfaces)</footer>
+  <footer>Runs on OpenCASCADE &middot; 186 (BREP) &rarr; 144 (trimmed surfaces) &middot; viewer via three.js</footer>
 </div>
 
-<script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
 const drop = document.getElementById('drop');
 const fileInput = document.getElementById('file');
 const list = document.getElementById('list');
+const viewerWrap = document.getElementById('viewer-wrap');
+const viewerEl = document.getElementById('viewer');
+const viewerLabel = document.getElementById('viewer-label');
+const viewerSpin = document.getElementById('viewer-spin');
 
+const OK_EXT = /\.(igs|iges|step|stp)$/i;
+const models = new Map();   // id -> { name, buffer, geometry }
+let activeId = null;
+let idCounter = 0;
+
+// ---- drag & drop ----
 drop.addEventListener('click', () => fileInput.click());
 ['dragenter','dragover'].forEach(e =>
   drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('hover'); }));
@@ -83,41 +139,60 @@ drop.addEventListener('click', () => fileInput.click());
 drop.addEventListener('drop', ev => queue([...ev.dataTransfer.files]));
 fileInput.addEventListener('change', () => { queue([...fileInput.files]); fileInput.value = ''; });
 
-const OK_EXT = /\.(igs|iges|step|stp)$/i;
+list.addEventListener('click', e => {
+  const li = e.target.closest('li.item');
+  if (li && li.dataset.viewable) showModel(Number(li.dataset.id));
+});
 
 async function queue(files) {
-  const valid = files.filter(f => OK_EXT.test(f.name));
-  for (const f of files.filter(f => !OK_EXT.test(f.name))) {
-    addRow(f.name, 'error', 'Unsupported file type');
-  }
-  // Convert one at a time to keep server memory low.
-  for (const f of valid) {
-    const row = addRow(f.name, 'working', 'Converting…');
+  for (const f of files.filter(f => !OK_EXT.test(f.name)))
+    addRow(f.name, null, 'error', 'Unsupported', 'Unsupported file type');
+  // One file at a time keeps server memory low.
+  for (const f of files.filter(f => OK_EXT.test(f.name))) {
+    const id = ++idCounter;
+    const row = addRow(f.name, id, 'working', 'Converting…');
+    let convErr = null, viewable = false;
     try {
       const { blob, fname } = await convertFile(f);
       triggerDownload(blob, fname);
-      setRow(row, 'done', 'Converted', fname);
-    } catch (err) {
-      setRow(row, 'error', 'Failed', null, err.message);
-    }
+    } catch (e) { convErr = e.message; }
+    try {
+      const buf = await meshFile(f);
+      models.set(id, { name: f.name, buffer: buf, geometry: null });
+      row.dataset.viewable = '1';
+      row.classList.add('viewable');
+      viewable = true;
+      if (activeId === null) showModel(id);
+    } catch (e) { /* mesh failed — leave non-viewable */ }
+
+    if (convErr && !viewable) setRow(row, 'error', 'Failed', convErr);
+    else if (convErr) setRow(row, 'warn', 'View only', 'Convert failed: ' + convErr);
+    else setRow(row, 'done', viewable ? 'Converted · click to view' : 'Converted');
   }
 }
 
 async function convertFile(file) {
-  const fd = new FormData();
-  fd.append('file', file);
+  const fd = new FormData(); fd.append('file', file);
   const res = await fetch('/convert', { method: 'POST', body: fd });
-  if (!res.ok) {
-    let msg = `Server error (${res.status})`;
-    try { const j = await res.json(); if (j.error) msg = j.error; } catch (_) {}
-    throw new Error(msg);
-  }
+  if (!res.ok) throw new Error(await errText(res));
   const blob = await res.blob();
   let fname = file.name.replace(OK_EXT, '') + '_tubesT.igs';
-  const cd = res.headers.get('Content-Disposition') || '';
-  const m = cd.match(/filename="?([^"]+)"?/);
+  const m = (res.headers.get('Content-Disposition') || '').match(/filename="?([^"]+)"?/);
   if (m) fname = m[1];
   return { blob, fname };
+}
+
+async function meshFile(file) {
+  const fd = new FormData(); fd.append('file', file);
+  const res = await fetch('/mesh', { method: 'POST', body: fd });
+  if (!res.ok) throw new Error(await errText(res));
+  return await res.arrayBuffer();
+}
+
+async function errText(res) {
+  let msg = `Server error (${res.status})`;
+  try { const j = await res.json(); if (j.error) msg = j.error; } catch (_) {}
+  return msg;
 }
 
 function triggerDownload(blob, fname) {
@@ -127,12 +202,18 @@ function triggerDownload(blob, fname) {
   a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-function addRow(name, state, statusText, errMsg) {
+// ---- rows ----
+const EYE = '<svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+  + '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+function addRow(name, id, state, statusText, errMsg) {
   const li = document.createElement('li'); li.className = 'item';
-  li.innerHTML = `
-    <span class="dot ${state}"></span>
-    <span class="name">${escapeHtml(name)}</span>
-    <span class="status ${state}">${statusText}</span>`;
+  if (id != null) li.dataset.id = id;
+  li.innerHTML =
+    `<span class="dot ${state}"></span>` +
+    `<span class="name">${escapeHtml(name)}</span>` +
+    EYE +
+    `<span class="status ${state}">${statusText}</span>`;
   if (errMsg) {
     const e = document.createElement('span'); e.className = 'err-msg';
     e.textContent = errMsg; li.appendChild(e);
@@ -141,7 +222,7 @@ function addRow(name, state, statusText, errMsg) {
   return li;
 }
 
-function setRow(li, state, statusText, fname, errMsg) {
+function setRow(li, state, statusText, errMsg) {
   li.querySelector('.dot').className = 'dot ' + state;
   const s = li.querySelector('.status'); s.className = 'status ' + state; s.textContent = statusText;
   if (errMsg) {
@@ -151,9 +232,82 @@ function setRow(li, state, statusText, fname, errMsg) {
   }
 }
 
+function highlightActive() {
+  for (const li of list.querySelectorAll('li.item'))
+    li.classList.toggle('active', Number(li.dataset.id) === activeId);
+}
+
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// ---- three.js viewer ----
+let renderer, scene, camera, controls, currentMesh, grid;
+const loader = new STLLoader();
+
+function initViewer() {
+  const w = viewerEl.clientWidth, h = viewerEl.clientHeight;
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0c1015);
+  camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1e6);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(w, h);
+  viewerEl.appendChild(renderer.domElement);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x35404a, 1.0));
+  const d1 = new THREE.DirectionalLight(0xffffff, 1.7); d1.position.set(1, 1.4, 1); scene.add(d1);
+  const d2 = new THREE.DirectionalLight(0xffffff, 0.5); d2.position.set(-1, -0.5, -0.8); scene.add(d2);
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = 0.09;
+  new ResizeObserver(onResize).observe(viewerEl);
+  (function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+}
+
+function onResize() {
+  if (!renderer) return;
+  const w = viewerEl.clientWidth, h = viewerEl.clientHeight;
+  camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+}
+
+function showModel(id) {
+  const m = models.get(id); if (!m) return;
+  viewerWrap.style.display = 'block';
+  if (!renderer) initViewer();
+  activeId = id;
+  viewerLabel.textContent = m.name;
+
+  if (currentMesh) {
+    scene.remove(currentMesh); currentMesh.material.dispose(); currentMesh = null;
+  }
+  if (grid) { scene.remove(grid); grid = null; }
+
+  if (!m.geometry) {
+    m.geometry = loader.parse(m.buffer);
+    if (!m.geometry.attributes.normal) m.geometry.computeVertexNormals();
+  }
+  const geo = m.geometry;
+  const mat = new THREE.MeshStandardMaterial({ color: 0x9db2c4, metalness: 0.25, roughness: 0.55 });
+  const mesh = new THREE.Mesh(geo, mat);
+
+  geo.computeBoundingBox();
+  const size = new THREE.Vector3(), center = new THREE.Vector3();
+  geo.boundingBox.getSize(size); geo.boundingBox.getCenter(center);
+  mesh.position.sub(center);
+  scene.add(mesh); currentMesh = mesh;
+
+  const maxDim = Math.max(size.x, size.y, size.z) || 100;
+  grid = new THREE.GridHelper(maxDim * 2.2, 22, 0x2b3542, 0x18212b);
+  grid.position.y = -size.y / 2 - maxDim * 0.02;
+  scene.add(grid);
+
+  const dist = maxDim * 1.9;
+  camera.position.set(dist * 0.9, dist * 0.7, dist);
+  camera.near = maxDim / 1000; camera.far = maxDim * 40; camera.updateProjectionMatrix();
+  controls.target.set(0, 0, 0); controls.update();
+
+  onResize();
+  highlightActive();
 }
 </script>
 </body>
