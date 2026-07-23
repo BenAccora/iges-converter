@@ -16,31 +16,18 @@
     font: 15px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     display: flex; flex-direction: column; align-items: center; padding: 40px 16px;
   }
-  .page {
-    display: flex; align-items: flex-start; justify-content: center;
-    gap: 56px; width: 100%;
-  }
   .wrap { width: 100%; max-width: 760px; position: relative; z-index: 1; }
 
-  /* Decorative photo. 'contain' so the whole frame is visible (never cropped),
-     with the same radial fade so it reads as a backdrop, not a hero image. */
+  /* Decorative photo, stacked below the content and centred. 'contain' keeps the
+     whole frame visible (never cropped); radial fade so it reads as a backdrop. */
   .photo {
+    display: block; margin: 28px auto 0;
+    width: min(380px, 80vw); height: min(380px, 80vw);
     background: url('/static/tubes.jpg') center / contain no-repeat;
     opacity: .16; filter: saturate(.85) contrast(1.05);
     -webkit-mask-image: radial-gradient(ellipse at center, #000 45%, transparent 78%);
     mask-image: radial-gradient(ellipse at center, #000 45%, transparent 78%);
     pointer-events: none;
-  }
-  /* Wide screens: sit beside the content so nothing overlaps the image. */
-  @media (min-width: 1200px) {
-    .photo { flex: none; width: 380px; height: 380px; }
-  }
-  /* Narrow screens: no room alongside, so fall back to a centred backdrop. */
-  @media (max-width: 1199px) {
-    .photo {
-      position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      width: min(440px, 80vw); height: min(440px, 80vw); z-index: 0;
-    }
   }
   h1 { font-size: 22px; margin: 0 0 4px; }
   p.sub { color: var(--muted); margin: 0 0 24px; }
@@ -108,7 +95,6 @@
 </script>
 </head>
 <body>
-<div class="page">
 <div class="wrap">
   <h1>IGES &rarr; Tubes&nbsp;T Converter</h1>
   <p class="sub">Drop Onshape IGS/STEP files. Each is re-written as legacy
@@ -135,9 +121,9 @@
 
   <ul id="list"></ul>
 
+  <aside class="photo" aria-hidden="true"></aside>
+
   <footer>Runs on OpenCASCADE &middot; 186 (BREP) &rarr; 144 (trimmed surfaces) &middot; viewer via three.js</footer>
-</div>
-<aside class="photo" aria-hidden="true"></aside>
 </div>
 
 <script type="module">
